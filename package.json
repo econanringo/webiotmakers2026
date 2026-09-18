@@ -1,0 +1,19 @@
+{
+  "name": "webiotmakers2026",
+  "version": "1.0.0",
+  "description": "Web x IoT Makers Challenge 2026 in Okayama Team A",
+  "homepage": "https://github.com/econanringo/webiotmakers2026#readme",
+  "bugs": {
+    "url": "https://github.com/econanringo/webiotmakers2026/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/econanringo/webiotmakers2026.git"
+  },
+  "author": "econanringo",
+  "type": "commonjs",
+  "main": "main.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  }
+}
