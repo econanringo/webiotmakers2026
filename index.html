@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CHIRIMEN リモート操作</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #111;
+      --card: #1c1c1e;
+      --text: #f5f5f7;
+      --muted: #a1a1a6;
+      --accent: #0a84ff;
+      --ok: #30d158;
+      --off: #ff453a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 16px;
+      max-width: 480px;
+      margin-inline: auto;
+    }
+    h1 { font-size: 1.2rem; margin: 0 0 12px; }
+    .status {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
+    .status.ok { color: var(--ok); }
+    .card {
+      background: var(--card);
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+    .row {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      margin: 6px 0;
+    }
+    .label { color: var(--muted); }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    button {
+      appearance: none;
+      border: 0;
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-size: 1rem;
+      background: var(--accent);
+      color: white;
+      flex: 1 1 30%;
+      min-height: 44px;
+    }
+    button.secondary { background: #3a3a3c; }
+    button.danger { background: var(--off); }
+  </style>
+</head>
+<body>
+  <h1>CHIRIMEN リモート</h1>
+  <div id="connection" class="status">接続中...</div>
+
+  <section class="card">
+    <div class="row"><span class="label">温度</span><span id="temperature">--</span></div>
+    <div class="row"><span class="label">湿度</span><span id="humidity">--</span></div>
+    <div class="row"><span class="label">ファン</span><span id="fan">--</span></div>
+    <div class="actions">
+      <button type="button" data-fan="AUTO">自動</button>
+      <button type="button" data-fan="ON">ON</button>
+      <button type="button" class="danger" data-fan="OFF">OFF</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="row"><span class="label">照度</span><span id="lux">--</span></div>
+    <div class="row"><span class="label">ロック</span><span id="lock">--</span></div>
+    <div class="row"><span class="label">センサー</span><span id="sensor">--</span></div>
+    <div class="row"><span class="label">サーボ</span><span id="servo">--</span></div>
+    <div class="actions">
+      <button type="button" data-lock="UNLOCK">UNLOCK</button>
+      <button type="button" class="secondary" data-lock="LOCK">LOCK</button>
+      <button type="button" data-servo="RUN">サーボを動かす</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="row"><span class="label">最後の曲</span><span id="music">--</span></div>
+    <div class="actions">
+      <button type="button" data-track="1">1</button>
+      <button type="button" data-track="2">2</button>
+      <button type="button" data-track="3">3</button>
+      <button type="button" data-track="4">4</button>
+      <button type="button" data-track="5">5</button>
+      <button type="button" data-track="6">6</button>
+    </div>
+  </section>
+
+  <script type="module">
+    import { RelayServer } from "https://chirimen.org/remote-connection/js/beta/RelayServer.js";
+
+    const CHANNEL_NAME = "webiotmakers2026-team-a";
+    const connectionEl = document.getElementById("connection");
+    const temperatureEl = document.getElementById("temperature");
+    const humidityEl = document.getElementById("humidity");
+    const fanEl = document.getElementById("fan");
+    const luxEl = document.getElementById("lux");
+    const lockEl = document.getElementById("lock");
+    const sensorEl = document.getElementById("sensor");
+    const servoEl = document.getElementById("servo");
+    const musicEl = document.getElementById("music");
+
+    function fmtNum(value, digits, unit) {
+      if (value == null || Number.isNaN(Number(value))) return "--";
+      return `${Number(value).toFixed(digits)}${unit}`;
+    }
+
+    function applyStatus(payload) {
+      if (payload.climate) {
+        temperatureEl.textContent = fmtNum(payload.climate.temperature, 2, "℃");
+        humidityEl.textContent = fmtNum(payload.climate.humidity, 2, "%");
+      }
+      if (payload.fan) {
+        fanEl.textContent = `${payload.fan.on ? "ON" : "OFF"} / ${payload.fan.mode}`;
+      }
+      if (payload.music) {
+        musicEl.textContent = payload.music.lastTrack ?? "--";
+      }
+      if (payload.lock) lockEl.textContent = payload.lock;
+      if (payload.sensor) sensorEl.textContent = payload.sensor;
+      if (payload.lux != null) luxEl.textContent = fmtNum(payload.lux, 3, " lx");
+      if (payload.servo) {
+        servoEl.textContent = `${payload.servo.state} / ${payload.servo.kind} (${payload.servo.count}回)`;
+      }
+    }
+
+    function handleMessage({ data }) {
+      const payload = typeof data === "string" ? JSON.parse(data) : data;
+      if (!payload || typeof payload !== "object") return;
+
+      switch (payload.type) {
+        case "status":
+          applyStatus(payload);
+          break;
+        case "climate":
+          temperatureEl.textContent = fmtNum(payload.temperature, 2, "℃");
+          humidityEl.textContent = fmtNum(payload.humidity, 2, "%");
+          break;
+        case "fan":
+          fanEl.textContent = `${payload.on ? "ON" : "OFF"} / ${payload.mode}`;
+          break;
+        case "music":
+          musicEl.textContent = payload.lastTrack ?? "--";
+          break;
+        case "lock":
+          lockEl.textContent = payload.state;
+          break;
+        case "sensor":
+          sensorEl.textContent = payload.state;
+          break;
+        case "lux":
+          luxEl.textContent = fmtNum(payload.value, 3, " lx");
+          break;
+        case "servo":
+          servoEl.textContent = `${payload.state} / ${payload.kind} (${payload.count}回)`;
+          break;
+        default:
+          break;
+      }
+    }
+
+    const relay = RelayServer("chirimentest", "chirimenSocket");
+    const channel = await relay.subscribe(CHANNEL_NAME);
+    connectionEl.textContent = "接続済み";
+    connectionEl.classList.add("ok");
+    channel.onmessage = handleMessage;
+    channel.send({ type: "sync" });
+
+    document.querySelectorAll("[data-fan]").forEach((button) => {
+      button.addEventListener("click", () => {
+        channel.send({ type: "fan", command: button.dataset.fan });
+      });
+    });
+    document.querySelectorAll("[data-track]").forEach((button) => {
+      button.addEventListener("click", () => {
+        channel.send({
+          type: "music",
+          command: "PLAY",
+          track: Number(button.dataset.track),
+        });
+      });
+    });
+    document.querySelectorAll("[data-lock]").forEach((button) => {
+      button.addEventListener("click", () => {
+        channel.send({ type: "lock", state: button.dataset.lock });
+      });
+    });
+    document.querySelector("[data-servo]").addEventListener("click", () => {
+      channel.send({ type: "servo", command: "RUN" });
+    });
+  </script>
+</body>
+</html>
