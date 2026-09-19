@@ -23,12 +23,14 @@ const LUX_SEND_INTERVAL = 1000;
 const FAN_ON_TEMP = 27.0;
 const FAN_OFF_TEMP = 25.0;
 const TOTAL_LEDS = 144;
-const CHUNK_SIZE = 12;
+// const CHUNK_SIZE = 12;
 const NEOPIXEL_I2C_ADDR = 0x41;
 const PIN_SW_LEFT = 24;
 const PIN_SW_RIGHT = 25;
 const COLOR_ORANGE = [255, 45, 0];
 const COLOR_BLACK = [0, 0, 0];
+const SPLIT_SEND = false;
+const SPLIT_AT = 72;
 const HALLOWEEN_ORANGE = [255, 40, 0];
 const HALLOWEEN_PURPLE = [120, 0, 200];
 const TRACK_UMBRELLA = 1;
@@ -99,15 +101,17 @@ async function readClimate() {
 }
 
 async function sendFrame(npix, getPixelColorFn, lockFn) {
+  const grb = [];
+  for (let i = 0; i < TOTAL_LEDS; i++) {
+    const color = getPixelColorFn(i);
+    grb.push(color[1], color[0], color[2]);
+  }
   await lockFn(async () => {
-    for (let start = 0; start < TOTAL_LEDS; start += CHUNK_SIZE) {
-      const chunkGRB = [];
-      for (let i = start; i < start + CHUNK_SIZE && i < TOTAL_LEDS; i++) {
-        const color = getPixelColorFn(i);
-        chunkGRB.push(color[1], color[0], color[2]);
-      }
-      await npix.setPixels(chunkGRB, start);
-      await sleep(2);
+    if (SPLIT_SEND) {
+      await npix.setPixels(grb.slice(0, SPLIT_AT * 3), 0);
+      await npix.setPixels(grb.slice(SPLIT_AT * 3), SPLIT_AT);
+    } else {
+      await npix.setPixels(grb, 0);
     }
   });
 }
@@ -543,6 +547,7 @@ async function runLedLoop() {
           blinkerStep = 1;
           await sleep(100);
         }
+        await sleep(30);
       } else if (ledEffect === "RIGHT") {
         await sendFrame(
           npixLeft,
@@ -560,12 +565,14 @@ async function runLedLoop() {
           blinkerStep = 1;
           await sleep(100);
         }
+        await sleep(30);
       } else if (ledEffect === "HALLOWEEN") {
         blinkerStep = 1;
         halloweenStep++;
         const getHalloweenColor = (i) => halloweenColor(i, halloweenStep);
         await sendFrame(npixLeft, getHalloweenColor, withI2c);
         await sendFrame(npixRight, getHalloweenColor, withI2cPort3);
+        await sleep(30);
       } else {
         blinkerStep = 1;
         await withI2c(() => npixLeft.setGlobal(0, 0, 0));
