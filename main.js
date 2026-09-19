@@ -71,6 +71,9 @@ await pca9685.setServo(0, REST_ANGLE);
 const npixLeft = new NPIX(i2cPort, NEOPIXEL_I2C_ADDR);
 const npixRight = new NPIX(i2cPort3, NEOPIXEL_I2C_ADDR);
 
+// ウィンカーの速度
+const BLINKER_SPEED = 6;
+
 let i2cChain = Promise.resolve();
 function withI2c(task) {
   const run = i2cChain.then(task, task);
@@ -541,7 +544,7 @@ async function runLedLoop() {
           (i) => halloweenColor(i, halloweenStep),
           withI2cPort3,
         );
-        blinkerStep++;
+        blinkerStep += BLINKER_SPEED;
         halloweenStep++;
         if (blinkerStep > TOTAL_LEDS) {
           blinkerStep = 1;
@@ -559,7 +562,7 @@ async function runLedLoop() {
           (i) => (i < blinkerStep ? COLOR_ORANGE : COLOR_BLACK),
           withI2cPort3,
         );
-        blinkerStep++;
+        blinkerStep += BLINKER_SPEED;
         halloweenStep++;
         if (blinkerStep > TOTAL_LEDS) {
           blinkerStep = 1;
