@@ -72,7 +72,7 @@ const npixLeft = new NPIX(i2cPort, NEOPIXEL_I2C_ADDR);
 const npixRight = new NPIX(i2cPort3, NEOPIXEL_I2C_ADDR);
 
 // ウィンカーの速度
-const BLINKER_SPEED = 6;
+const BLINKER_SPEED = 10;
 
 let i2cChain = Promise.resolve();
 function withI2c(task) {
