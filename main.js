@@ -31,6 +31,11 @@ const COLOR_ORANGE = [255, 45, 0];
 const COLOR_BLACK = [0, 0, 0];
 const HALLOWEEN_ORANGE = [255, 40, 0];
 const HALLOWEEN_PURPLE = [120, 0, 200];
+const TRACK_UMBRELLA = 1;
+const TRACK_LEFT_BLINKER = 2;
+const TRACK_RIGHT_BLINKER = 3;
+const TRACK_FAN = 4;
+const TRACK_NIGHT_LED = 5;
 
 // ---- GPIO 初期化（ファン=GPIO17, ボタン=GPIO5入力, 出力=GPIO26, LEDスイッチ=GPIO24/25）----
 const gpioAccess = await requestGPIOAccess();
@@ -156,6 +161,7 @@ musicPort.on("open", () => {
 
   console.log("【操作方法】");
   console.log("1〜6の数字キーを押してEnterを押すと、対応する音が鳴ります。");
+  console.log("1:傘  2:左ウインカー  3:右ウインカー  4:ファン  5:夜間LED  6:手動用");
   console.log("プログラムを終了するには Ctrl+C を押してください。");
 
   const rl = readline.createInterface({
@@ -316,6 +322,7 @@ async function setFan(on, source) {
   await fanPort.write(on ? 1 : 0);
   fanOn = on;
   console.log(`ファン${on ? "ON" : "OFF"} (${source})`);
+  if (on) playTrack(TRACK_FAN);
   sendFanState();
 }
 
@@ -370,6 +377,7 @@ async function activate(source) {
     count++;
     const kind = count % 2 === 1 ? "起動(ON)" : "停止(OFF)";
     console.log(source + ": " + count + "回目 -> " + kind);
+    if (source === "照度") playTrack(TRACK_UMBRELLA);
     servoState = "MOVING";
     sendServoState();
     await setServoAngle(ACTION_ANGLE);
@@ -506,8 +514,14 @@ async function runLedLoop() {
   while (true) {
     const nextEffect = resolveLedEffect();
     if (nextEffect !== ledEffect) {
+      const prevEffect = ledEffect;
       ledEffect = nextEffect;
       if (ledEffect === "OFF") blinkerStep = 1;
+      if (ledEffect === "LEFT") playTrack(TRACK_LEFT_BLINKER);
+      else if (ledEffect === "RIGHT") playTrack(TRACK_RIGHT_BLINKER);
+      else if (ledEffect === "HALLOWEEN" && prevEffect === "OFF") {
+        playTrack(TRACK_NIGHT_LED);
+      }
       sendLedState();
     }
 
