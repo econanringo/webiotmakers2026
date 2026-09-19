@@ -11,7 +11,7 @@ const relay = gpioAccess.ports.get(17);
 await relay.export("out");
 
 const i2cAccess = await requestI2CAccess();
-const i2cPort = i2cAccess.ports.get(1);
+const i2cPort = i2cAccess.ports.get(3);
 
 const sht30 = new SHT30(i2cPort, 0x44);
 await sht30.init();
