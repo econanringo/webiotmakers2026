@@ -3,6 +3,7 @@ import { requestI2CAccess } from "node-web-i2c";
 import SHT30 from "@chirimen/sht30";
 import BH1750 from "@chirimen/bh1750";
 import PCA9685 from "@chirimen/pca9685";
+import NPIX from "@chirimen/neopixel-i2c";
 import { SerialPort } from "serialport";
 import readline from "readline";
 import nodeWebSocketLib from "websocket";
@@ -11,7 +12,8 @@ import { RelayServer } from "./RelayServer.js";
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const CHANNEL_NAME = "webiotmakers2026-team-a";
-const LUX_THRESHOLD = 10;
+const SERVO_LUX_THRESHOLD = 10;
+const LED_LUX_THRESHOLD = 50.0;
 const HIGH_HOLD_MS = 5000;
 const REST_ANGLE = 30;
 const ACTION_ANGLE = -15;
@@ -20,8 +22,17 @@ const READ_INTERVAL = 500;
 const LUX_SEND_INTERVAL = 1000;
 const FAN_ON_TEMP = 27.0;
 const FAN_OFF_TEMP = 25.0;
+const TOTAL_LEDS = 144;
+const CHUNK_SIZE = 12;
+const NEOPIXEL_I2C_ADDR = 0x41;
+const PIN_SW_LEFT = 24;
+const PIN_SW_RIGHT = 25;
+const COLOR_ORANGE = [255, 45, 0];
+const COLOR_BLACK = [0, 0, 0];
+const HALLOWEEN_ORANGE = [255, 40, 0];
+const HALLOWEEN_PURPLE = [120, 0, 200];
 
-// ---- GPIO 初期化（ファン=GPIO17, ボタン=GPIO5入力, 出力=GPIO26）----
+// ---- GPIO 初期化（ファン=GPIO17, ボタン=GPIO5入力, 出力=GPIO26, LEDスイッチ=GPIO24/25）----
 const gpioAccess = await requestGPIOAccess();
 const fanPort = gpioAccess.ports.get(17);
 await fanPort.export("out");
@@ -30,10 +41,15 @@ await button.export("in");
 const output = gpioAccess.ports.get(26);
 await output.export("out");
 await output.write(0);
+const swLeft = gpioAccess.ports.get(PIN_SW_LEFT);
+await swLeft.export("in");
+const swRight = gpioAccess.ports.get(PIN_SW_RIGHT);
+await swRight.export("in");
 
-// ---- I2C 初期化（SHT30 + BH1750 + PCA9685）----
+// ---- I2C 初期化（SHT30 + BH1750 + PCA9685 + NeoPixel左右）----
 const i2cAccess = await requestI2CAccess();
 const i2cPort = i2cAccess.ports.get(1);
+const i2cPort3 = i2cAccess.ports.get(3);
 
 const sht30 = new SHT30(i2cPort, 0x44);
 await sht30.init();
@@ -45,12 +61,25 @@ const pca9685 = new PCA9685(i2cPort, 0x40);
 await pca9685.init(0.001, 0.002, 30);
 await pca9685.setServo(0, REST_ANGLE);
 
+const npixLeft = new NPIX(i2cPort, NEOPIXEL_I2C_ADDR);
+const npixRight = new NPIX(i2cPort3, NEOPIXEL_I2C_ADDR);
+
 let i2cChain = Promise.resolve();
 function withI2c(task) {
   const run = i2cChain.then(task, task);
   i2cChain = run.then(() => undefined, () => undefined);
   return run;
 }
+
+let i2cPort3Chain = Promise.resolve();
+function withI2cPort3(task) {
+  const run = i2cPort3Chain.then(task, task);
+  i2cPort3Chain = run.then(() => undefined, () => undefined);
+  return run;
+}
+
+await withI2c(() => npixLeft.init(TOTAL_LEDS));
+await withI2cPort3(() => npixRight.init(TOTAL_LEDS));
 
 async function setServoAngle(angle) {
   await withI2c(() => pca9685.setServo(0, angle));
@@ -62,6 +91,32 @@ async function readLux() {
 
 async function readClimate() {
   return withI2c(() => sht30.readData());
+}
+
+async function sendFrame(npix, getPixelColorFn, lockFn) {
+  await lockFn(async () => {
+    for (let start = 0; start < TOTAL_LEDS; start += CHUNK_SIZE) {
+      const chunkGRB = [];
+      for (let i = start; i < start + CHUNK_SIZE && i < TOTAL_LEDS; i++) {
+        const color = getPixelColorFn(i);
+        chunkGRB.push(color[1], color[0], color[2]);
+      }
+      await npix.setPixels(chunkGRB, start);
+      await sleep(2);
+    }
+  });
+}
+
+function interpolateColor(color1, color2, factor) {
+  const r = Math.round(color1[0] + factor * (color2[0] - color1[0]));
+  const g = Math.round(color1[1] + factor * (color2[1] - color1[1]));
+  const b = Math.round(color1[2] + factor * (color2[2] - color1[2]));
+  return [r, g, b];
+}
+
+function halloweenColor(i, step) {
+  const wave = (Math.sin((i + step) * 0.15) + 1) / 2;
+  return interpolateColor(HALLOWEEN_ORANGE, HALLOWEEN_PURPLE, wave);
 }
 
 // ---- DFPlayer シリアル ----
@@ -134,6 +189,12 @@ let lastSensor = "OFF";
 let lastLux = null;
 let lastLuxSentAt = 0;
 let servoState = "IDLE";
+let ledMode = "AUTO";
+let ledEffect = "OFF";
+let isLeftPressed = false;
+let isRightPressed = false;
+let blinkerStep = 1;
+let halloweenStep = 0;
 
 function lockStateLabel() {
   return isUnlocked ? "UNLOCK" : "LOCK";
@@ -197,6 +258,16 @@ function sendMusicState() {
   });
 }
 
+function sendLedState() {
+  sendMessage({
+    type: "led",
+    mode: ledMode,
+    effect: ledEffect,
+    left: isLeftPressed,
+    right: isRightPressed,
+  });
+}
+
 function sendSnapshot() {
   sendMessage({
     type: "status",
@@ -218,6 +289,12 @@ function sendSnapshot() {
       state: servoState,
       kind: kindLabel(),
       count,
+    },
+    led: {
+      mode: ledMode,
+      effect: ledEffect,
+      left: isLeftPressed,
+      right: isRightPressed,
     },
   });
 }
@@ -260,6 +337,23 @@ function applyMusicCommand(data) {
   const track = Number(data.track);
   if (!Number.isInteger(track) || track < 1 || track > 6) return;
   playTrack(track);
+}
+
+function applyLedCommand(data) {
+  const command = data.command;
+  if (
+    command !== "AUTO" &&
+    command !== "HALLOWEEN" &&
+    command !== "LEFT" &&
+    command !== "RIGHT" &&
+    command !== "OFF"
+  ) {
+    return;
+  }
+  ledMode = command;
+  blinkerStep = 1;
+  console.log(`LEDモード: ${ledMode}`);
+  sendLedState();
 }
 
 async function activate(source) {
@@ -325,6 +419,9 @@ function handleMessage({ data }) {
     case "music":
       applyMusicCommand(payload);
       break;
+    case "led":
+      applyLedCommand(payload);
+      break;
     case "sync":
       sendSnapshot();
       break;
@@ -379,7 +476,7 @@ async function runLuxLoop() {
     const lightAllowed = isUnlocked && count % 2 === 0;
     const now = Date.now();
 
-    if (lightAllowed && lastLux >= LUX_THRESHOLD) {
+    if (lightAllowed && lastLux >= SERVO_LUX_THRESHOLD) {
       if (highSince === null) highSince = now;
       if (now - highSince >= HIGH_HOLD_MS) {
         highSince = null;
@@ -390,6 +487,81 @@ async function runLuxLoop() {
     }
 
     await sleep(READ_INTERVAL);
+  }
+}
+
+function resolveLedEffect() {
+  if (ledMode === "OFF") return "OFF";
+  if (ledMode === "HALLOWEEN") return "HALLOWEEN";
+  if (ledMode === "LEFT") return "LEFT";
+  if (ledMode === "RIGHT") return "RIGHT";
+  if (lastLux == null || lastLux >= LED_LUX_THRESHOLD) return "OFF";
+  if (isLeftPressed) return "LEFT";
+  if (isRightPressed) return "RIGHT";
+  return "HALLOWEEN";
+}
+
+async function runLedLoop() {
+  console.log("制御開始: 照度判定 ＆ ハロウィン演出 ＆ 左右ウインカー");
+  while (true) {
+    const nextEffect = resolveLedEffect();
+    if (nextEffect !== ledEffect) {
+      ledEffect = nextEffect;
+      if (ledEffect === "OFF") blinkerStep = 1;
+      sendLedState();
+    }
+
+    try {
+      if (ledEffect === "LEFT") {
+        await sendFrame(
+          npixLeft,
+          (i) => (i < blinkerStep ? COLOR_ORANGE : COLOR_BLACK),
+          withI2c,
+        );
+        await sendFrame(
+          npixRight,
+          (i) => halloweenColor(i, halloweenStep),
+          withI2cPort3,
+        );
+        blinkerStep++;
+        halloweenStep++;
+        if (blinkerStep > TOTAL_LEDS) {
+          blinkerStep = 1;
+          await sleep(100);
+        }
+      } else if (ledEffect === "RIGHT") {
+        await sendFrame(
+          npixLeft,
+          (i) => halloweenColor(i, halloweenStep),
+          withI2c,
+        );
+        await sendFrame(
+          npixRight,
+          (i) => (i < blinkerStep ? COLOR_ORANGE : COLOR_BLACK),
+          withI2cPort3,
+        );
+        blinkerStep++;
+        halloweenStep++;
+        if (blinkerStep > TOTAL_LEDS) {
+          blinkerStep = 1;
+          await sleep(100);
+        }
+      } else if (ledEffect === "HALLOWEEN") {
+        blinkerStep = 1;
+        halloweenStep++;
+        const getHalloweenColor = (i) => halloweenColor(i, halloweenStep);
+        await sendFrame(npixLeft, getHalloweenColor, withI2c);
+        await sendFrame(npixRight, getHalloweenColor, withI2cPort3);
+      } else {
+        blinkerStep = 1;
+        await withI2c(() => npixLeft.setGlobal(0, 0, 0));
+        await withI2cPort3(() => npixRight.setGlobal(0, 0, 0));
+        await sleep(1000);
+      }
+    } catch (error) {
+      console.error("LED制御に失敗:", error);
+      await sleep(200);
+    }
   }
 }
 
@@ -405,6 +577,12 @@ channel.onmessage = handleMessage;
 
 lastSensor = (await readSensorPressed()) ? "ON" : "OFF";
 try {
+  isLeftPressed = (await swLeft.read()) === 1;
+  isRightPressed = (await swRight.read()) === 1;
+} catch (error) {
+  console.error("LEDスイッチの初回読み取りに失敗:", error);
+}
+try {
   lastLux = Number((await readLux()).toFixed(3));
 } catch (error) {
   console.error("照度の初回読み取りに失敗:", error);
@@ -417,6 +595,18 @@ try {
   console.error("温湿度の初回読み取りに失敗:", error);
 }
 sendSnapshot();
+
+swLeft.onchange = (e) => {
+  isLeftPressed = e.value === 1;
+  console.log(`左スイッチ: ${isLeftPressed ? "ON" : "OFF"}`);
+  sendLedState();
+};
+
+swRight.onchange = (e) => {
+  isRightPressed = e.value === 1;
+  console.log(`右スイッチ: ${isRightPressed ? "ON" : "OFF"}`);
+  sendLedState();
+};
 
 button.onchange = async (e) => {
   const pressed = e.value == 0;
@@ -435,3 +625,4 @@ button.onchange = async (e) => {
 
 runFanLoop();
 runLuxLoop();
+runLedLoop();

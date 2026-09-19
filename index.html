@@ -82,6 +82,19 @@
   </section>
 
   <section class="card">
+    <div class="row"><span class="label">LED</span><span id="led">--</span></div>
+    <div class="row"><span class="label">左スイッチ</span><span id="ledLeft">--</span></div>
+    <div class="row"><span class="label">右スイッチ</span><span id="ledRight">--</span></div>
+    <div class="actions">
+      <button type="button" data-led="AUTO">自動</button>
+      <button type="button" data-led="HALLOWEEN">ハロウィン</button>
+      <button type="button" data-led="LEFT">左ウインカー</button>
+      <button type="button" data-led="RIGHT">右ウインカー</button>
+      <button type="button" class="danger" data-led="OFF">消灯</button>
+    </div>
+  </section>
+
+  <section class="card">
     <div class="row"><span class="label">照度</span><span id="lux">--</span></div>
     <div class="row"><span class="label">ロック</span><span id="lock">--</span></div>
     <div class="row"><span class="label">センサー</span><span id="sensor">--</span></div>
@@ -113,6 +126,9 @@
     const temperatureEl = document.getElementById("temperature");
     const humidityEl = document.getElementById("humidity");
     const fanEl = document.getElementById("fan");
+    const ledEl = document.getElementById("led");
+    const ledLeftEl = document.getElementById("ledLeft");
+    const ledRightEl = document.getElementById("ledRight");
     const luxEl = document.getElementById("lux");
     const lockEl = document.getElementById("lock");
     const sensorEl = document.getElementById("sensor");
@@ -124,6 +140,16 @@
       return `${Number(value).toFixed(digits)}${unit}`;
     }
 
+    function ledLabel(led) {
+      return `${led.effect} / ${led.mode}`;
+    }
+
+    function applyLed(led) {
+      ledEl.textContent = ledLabel(led);
+      ledLeftEl.textContent = led.left ? "ON" : "OFF";
+      ledRightEl.textContent = led.right ? "ON" : "OFF";
+    }
+
     function applyStatus(payload) {
       if (payload.climate) {
         temperatureEl.textContent = fmtNum(payload.climate.temperature, 2, "℃");
@@ -132,6 +158,7 @@
       if (payload.fan) {
         fanEl.textContent = `${payload.fan.on ? "ON" : "OFF"} / ${payload.fan.mode}`;
       }
+      if (payload.led) applyLed(payload.led);
       if (payload.music) {
         musicEl.textContent = payload.music.lastTrack ?? "--";
       }
@@ -157,6 +184,9 @@
           break;
         case "fan":
           fanEl.textContent = `${payload.on ? "ON" : "OFF"} / ${payload.mode}`;
+          break;
+        case "led":
+          applyLed(payload);
           break;
         case "music":
           musicEl.textContent = payload.lastTrack ?? "--";
@@ -188,6 +218,11 @@
     document.querySelectorAll("[data-fan]").forEach((button) => {
       button.addEventListener("click", () => {
         channel.send({ type: "fan", command: button.dataset.fan });
+      });
+    });
+    document.querySelectorAll("[data-led]").forEach((button) => {
+      button.addEventListener("click", () => {
+        channel.send({ type: "led", command: button.dataset.led });
       });
     });
     document.querySelectorAll("[data-track]").forEach((button) => {
