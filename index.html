@@ -7,23 +7,79 @@
   <style>
     :root {
       color-scheme: dark;
-      /* ハロウィン: かぼちゃ(pumpkin) / 深紫(purple) / 毒々しい緑(slime) / 血(blood) */
-      --pumpkin: #ff7f11;
-      --pumpkin-dark: #d35400;
-      --purple: #6c3483;
-      --purple-deep: #1b0f2e;
-      --slime: #7cfc00;
-      --blood: #b3123a;
+    }
+
+    /* --- テーマ定義 --- */
+    /* ハロウィン */
+    body[data-theme="halloween"] {
+      --theme-icon: "🎃";
+      --accent: #ff7f11;
+      --accent-dark: #d35400;
       --bg-top: #150a24;
-      --bg-bottom: #0d0716;
       --card: #241435;
       --card-border: #4b2a63;
       --text: #f5eaff;
       --muted: #b39ddb;
-      --accent: var(--pumpkin);
-      --ok: var(--slime);
-      --off: var(--blood);
+      --ok: #7cfc00;
+      --off: #b3123a;
     }
+
+    /* 花見（春） */
+    body[data-theme="hanami"] {
+      --theme-icon: "🌸";
+      --accent: #ff85a2;
+      --accent-dark: #e0567a;
+      --bg-top: #2a1b24;
+      --card: #3d2331;
+      --card-border: #6e3b52;
+      --text: #fff0f5;
+      --muted: #f4b6c2;
+      --ok: #a8e6cf;
+      --off: #ff6b6b;
+    }
+
+    /* 花火（夏） */
+    body[data-theme="hanabi"] {
+      --theme-icon: "🎆";
+      --accent: #00d2ff;
+      --accent-dark: #0099cc;
+      --bg-top: #0a1128;
+      --card: #121e3d;
+      --card-border: #1f3566;
+      --text: #e6f7ff;
+      --muted: #80d4ff;
+      --ok: #00ffcc;
+      --off: #ff0055;
+    }
+
+    /* クリスマス（冬） */
+    body[data-theme="christmas"] {
+      --theme-icon: "🎄";
+      --accent: #e63946;
+      --accent-dark: #b81d2a;
+      --bg-top: #0b1d13;
+      --card: #153322;
+      --card-border: #235438;
+      --text: #f1faee;
+      --muted: #a8dadc;
+      --ok: #52b788;
+      --off: #d62828;
+    }
+
+    /* 正月（新春） */
+    body[data-theme="newyear"] {
+      --theme-icon: "🎍";
+      --accent: #d4af37;
+      --accent-dark: #aa8c2c;
+      --bg-top: #220808;
+      --card: #3a1010;
+      --card-border: #632020;
+      --text: #fff8e7;
+      --muted: #e6ca65;
+      --ok: #62d2a2;
+      --off: #c0392b;
+    }
+
     * { box-sizing: border-box; }
     body {
       margin: 0;
@@ -34,33 +90,62 @@
       max-width: 480px;
       margin-inline: auto;
       min-height: 100vh;
+      position: relative;
+    }
+
+    /* ヘッダー周り */
+    .header-container {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 16px;
     }
     h1 {
       font-size: 1.3rem;
       margin: 0 0 4px;
-      color: var(--pumpkin);
+      color: var(--accent);
       display: flex;
       align-items: center;
       gap: 8px;
     }
     h1::before {
-      content: "🎃";
+      content: var(--theme-icon);
     }
     .subtitle {
       font-size: 0.75rem;
       color: var(--muted);
-      margin: 0 0 16px;
+      margin: 0;
     }
+
+    /* 歯車ボタン */
+    .settings-btn {
+      background: transparent;
+      border: none;
+      font-size: 1.4rem;
+      cursor: pointer;
+      padding: 4px 8px;
+      color: var(--muted);
+      min-height: auto;
+      box-shadow: none;
+      flex: none;
+    }
+    .settings-btn:hover {
+      transform: rotate(45deg);
+      background: transparent;
+      box-shadow: none;
+    }
+
     .status {
       font-size: 0.85rem;
       color: var(--muted);
       margin-bottom: 16px;
     }
     .status.ok { color: var(--ok); }
+
     .card {
       background: var(--card);
       border: 1px solid var(--card-border);
-      border-left: 3px solid var(--pumpkin);
+      border-left: 3px solid var(--accent);
       border-radius: 8px;
       padding: 14px 16px;
       margin-bottom: 12px;
@@ -105,13 +190,165 @@
       filter: brightness(0.92);
       box-shadow: 0 1px 0 rgba(0, 0, 0, 0.12);
     }
-    button.secondary { background: var(--muted); }
+    button.secondary { background: var(--muted); color: #111; }
     button.danger { background: var(--off); }
+
+    details.log-panel {
+      padding: 10px 16px 12px;
+    }
+    details.log-panel > summary {
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 600;
+      list-style: none;
+    }
+    details.log-panel > summary::-webkit-details-marker {
+      display: none;
+    }
+    details.log-panel > summary::marker {
+      content: "";
+    }
+    details.log-panel > summary::before {
+      content: "▶";
+      display: inline-block;
+      font-size: 0.7rem;
+      color: var(--accent);
+      transition: transform 0.15s ease;
+    }
+    details.log-panel[open] > summary::before {
+      transform: rotate(90deg);
+    }
+    .log-title { flex: 0 0 auto; }
+    .log-latest {
+      flex: 1 1 auto;
+      min-width: 0;
+      font-weight: 400;
+      font-size: 0.75rem;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .log-count {
+      flex: 0 0 auto;
+      font-size: 0.75rem;
+      color: var(--accent);
+      background: color-mix(in srgb, var(--accent) 18%, transparent);
+      border-radius: 999px;
+      padding: 2px 8px;
+    }
+    .log-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .log-toolbar label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    .log-toolbar button {
+      flex: 0 0 auto;
+      min-height: 36px;
+      padding: 8px 12px;
+      font-size: 0.8rem;
+    }
+    .log-output {
+      max-height: 260px;
+      overflow: auto;
+      margin: 8px 0 0;
+      padding: 8px 10px;
+      background: color-mix(in srgb, var(--bg-top) 82%, #000);
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+      font-size: 0.72rem;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .log-line { color: var(--text); }
+    .log-line.warn { color: var(--accent); }
+    .log-line.error { color: var(--off); }
+    .log-time {
+      color: var(--muted);
+      margin-right: 6px;
+    }
+    .log-empty {
+      color: var(--muted);
+    }
+
+    /* 設定モーダル */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.7);
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      backdrop-filter: blur(4px);
+    }
+    .modal-overlay.open {
+      display: flex;
+    }
+    .modal {
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 20px;
+      width: 90%;
+      max-width: 360px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    }
+    .modal h2 {
+      margin: 0 0 16px;
+      font-size: 1.1rem;
+      color: var(--text);
+    }
+    .theme-options {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .theme-btn {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      justify-content: flex-start;
+      width: 100%;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--card-border);
+      color: var(--text);
+    }
+    .theme-btn.active {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: #fff;
+    }
+    .close-btn {
+      width: 100%;
+      background: var(--card-border);
+    }
   </style>
 </head>
-<body>
-  <h1>CHIRIMEN リモート</h1>
-  <p class="subtitle">OKAYAMA IoT CONTROL PANEL</p>
+<body data-theme="halloween">
+
+  <div class="header-container">
+    <div>
+      <h1>CHIRIMEN リモート</h1>
+      <p class="subtitle">OKAYAMA IoT CONTROL PANEL</p>
+    </div>
+    <button id="settingsBtn" class="settings-btn" aria-label="設定">⚙️</button>
+  </div>
+
   <div id="connection" class="status">接続中...</div>
 
   <section class="card">
@@ -131,7 +368,7 @@
     <div class="row"><span class="label">右スイッチ</span><span id="ledRight">--</span></div>
     <div class="actions">
       <button type="button" data-led="AUTO">自動</button>
-      <button type="button" data-led="HALLOWEEN">ハロウィン</button>
+      <button type="button" id="seasonalLedBtn" data-led="HALLOWEEN">ハロウィン</button>
       <button type="button" data-led="LEFT">左ウインカー</button>
       <button type="button" data-led="RIGHT">右ウインカー</button>
       <button type="button" class="danger" data-led="OFF">消灯</button>
@@ -162,9 +399,86 @@
     </div>
   </section>
 
+  <details class="card log-panel">
+    <summary>
+      <span class="log-title">デバイスログ</span>
+      <span id="logLatest" class="log-latest">まだログはありません</span>
+      <span id="logCount" class="log-count">0</span>
+    </summary>
+    <div class="log-toolbar">
+      <label><input type="checkbox" id="autoScroll" checked /> 自動スクロール</label>
+      <button type="button" class="secondary" id="clearLogs">クリア</button>
+    </div>
+    <div id="deviceLog" class="log-output"><div class="log-empty">main.js の console 出力がここに流れます</div></div>
+  </details>
+
+  <!-- テーマ設定ダイアログ -->
+  <div id="modalOverlay" class="modal-overlay">
+    <div class="modal">
+      <h2>UIテーマ切り替え</h2>
+      <div class="theme-options">
+        <button type="button" class="theme-btn" data-set-theme="halloween">🎃 ハロウィン</button>
+        <button type="button" class="theme-btn" data-set-theme="hanami">🌸 花見（春）</button>
+        <button type="button" class="theme-btn" data-set-theme="hanabi">🎆 花火（夏）</button>
+        <button type="button" class="theme-btn" data-set-theme="christmas">🎄 クリスマス</button>
+        <button type="button" class="theme-btn" data-set-theme="newyear">🎍 正月</button>
+      </div>
+      <button type="button" id="closeModalBtn" class="close-btn">閉じる</button>
+    </div>
+  </div>
+
   <script type="module">
     import { RelayServer } from "https://chirimen.org/remote-connection/js/beta/RelayServer.js";
 
+    // --- テーマ設定の対応マップ ---
+    const themeLedMap = {
+      halloween: { label: "ハロウィン", command: "HALLOWEEN" },
+      hanami:    { label: "花見",       command: "HANAMI" },
+      hanabi:    { label: "花火",       command: "HANABI" },
+      christmas: { label: "クリスマス", command: "CHRISTMAS" },
+      newyear:   { label: "正月",       command: "NEWYEAR" }
+    };
+
+    const seasonalLedBtn = document.getElementById("seasonalLedBtn");
+
+    // --- テーマ変更処理 ---
+    const savedTheme = localStorage.getItem("selectedTheme") || "halloween";
+    setTheme(savedTheme);
+
+    function setTheme(theme) {
+      document.body.setAttribute("data-theme", theme);
+      localStorage.setItem("selectedTheme", theme);
+      
+      // テーマ選択ボタンの active 切り替え
+      document.querySelectorAll("[data-set-theme]").forEach((btn) => {
+        btn.classList.toggle("active", btn.dataset.setTheme === theme);
+      });
+
+      // LEDボタンのテキストとコマンド(data-led)を連動変更
+      const themeConfig = themeLedMap[theme] || themeLedMap["halloween"];
+      seasonalLedBtn.textContent = themeConfig.label;
+      seasonalLedBtn.dataset.led = themeConfig.command;
+    }
+
+    const modalOverlay = document.getElementById("modalOverlay");
+    document.getElementById("settingsBtn").addEventListener("click", () => {
+      modalOverlay.classList.add("open");
+    });
+    document.getElementById("closeModalBtn").addEventListener("click", () => {
+      modalOverlay.classList.remove("open");
+    });
+    modalOverlay.addEventListener("click", (e) => {
+      if (e.target === modalOverlay) modalOverlay.classList.remove("open");
+    });
+
+    document.querySelectorAll("[data-set-theme]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        setTheme(btn.dataset.setTheme);
+        modalOverlay.classList.remove("open");
+      });
+    });
+
+    // --- CHIRIMEN 通信処理 ---
     const CHANNEL_NAME = "webiotmakers2026-team-a";
     const connectionEl = document.getElementById("connection");
     const temperatureEl = document.getElementById("temperature");
@@ -178,6 +492,54 @@
     const sensorEl = document.getElementById("sensor");
     const servoEl = document.getElementById("servo");
     const musicEl = document.getElementById("music");
+    const logOutputEl = document.getElementById("deviceLog");
+    const logCountEl = document.getElementById("logCount");
+    const logLatestEl = document.getElementById("logLatest");
+    const autoScrollEl = document.getElementById("autoScroll");
+    const MAX_LOG_LINES = 300;
+    let logCount = 0;
+
+    function formatLogTime(at) {
+      const date = new Date(at);
+      if (Number.isNaN(date.getTime())) return "--:--:--";
+      return date.toLocaleTimeString("ja-JP", { hour12: false });
+    }
+
+    function appendLog(payload) {
+      const empty = logOutputEl.querySelector(".log-empty");
+      if (empty) empty.remove();
+
+      const line = document.createElement("div");
+      line.className = `log-line ${payload.level || "info"}`;
+      const time = document.createElement("span");
+      time.className = "log-time";
+      time.textContent = `${formatLogTime(payload.at)} `;
+      line.append(time, payload.message ?? "");
+      logOutputEl.appendChild(line);
+
+      logCount += 1;
+      while (logOutputEl.childElementCount > MAX_LOG_LINES) {
+        logOutputEl.removeChild(logOutputEl.firstChild);
+      }
+      logCountEl.textContent = String(logCount);
+      logLatestEl.textContent = payload.message || "";
+      if (autoScrollEl.checked) {
+        logOutputEl.scrollTop = logOutputEl.scrollHeight;
+      }
+    }
+
+    document.getElementById("clearLogs").addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      logOutputEl.replaceChildren();
+      const empty = document.createElement("div");
+      empty.className = "log-empty";
+      empty.textContent = "ログをクリアしました";
+      logOutputEl.appendChild(empty);
+      logCount = 0;
+      logCountEl.textContent = "0";
+      logLatestEl.textContent = "まだログはありません";
+    });
 
     function fmtNum(value, digits, unit) {
       if (value == null || Number.isNaN(Number(value))) return "--";
@@ -247,6 +609,9 @@
         case "servo":
           servoEl.textContent = `${payload.state} / ${payload.kind} (${payload.count}回)`;
           break;
+        case "log":
+          appendLog(payload);
+          break;
         default:
           break;
       }
@@ -264,11 +629,15 @@
         channel.send({ type: "fan", command: button.dataset.fan });
       });
     });
-    document.querySelectorAll("[data-led]").forEach((button) => {
-      button.addEventListener("click", () => {
-        channel.send({ type: "led", command: button.dataset.led });
-      });
+
+    // イベント委譲（dynamicなコマンド値にも対応できるようdocument全体で処理）
+    document.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-led]");
+      if (btn) {
+        channel.send({ type: "led", command: btn.dataset.led });
+      }
     });
+
     document.querySelectorAll("[data-track]").forEach((button) => {
       button.addEventListener("click", () => {
         channel.send({

@@ -31,6 +31,73 @@ const COLOR_ORANGE = [255, 45, 0];
 const COLOR_BLACK = [0, 0, 0];
 const SPLIT_SEND = false;
 const SPLIT_AT = 72;
+const MAX_PENDING_LOGS = 200;
+
+let channel;
+const pendingLogs = [];
+let sendingLog = false;
+
+const originalConsole = {
+  log: console.log.bind(console),
+  warn: console.warn.bind(console),
+  error: console.error.bind(console),
+};
+
+function formatLogArgs(args) {
+  return args
+    .map((arg) => {
+      if (arg instanceof Error) return arg.stack || arg.message;
+      if (typeof arg === "string") return arg;
+      try {
+        return JSON.stringify(arg);
+      } catch {
+        return String(arg);
+      }
+    })
+    .join(" ");
+}
+
+function sendLog(level, message) {
+  const entry = {
+    type: "log",
+    level,
+    message,
+    at: Date.now(),
+  };
+  if (!channel) {
+    pendingLogs.push(entry);
+    if (pendingLogs.length > MAX_PENDING_LOGS) pendingLogs.shift();
+    return;
+  }
+  if (sendingLog) return;
+  sendingLog = true;
+  try {
+    channel.send(entry);
+  } finally {
+    sendingLog = false;
+  }
+}
+
+function flushPendingLogs() {
+  if (!channel || pendingLogs.length === 0) return;
+  for (const entry of pendingLogs) {
+    channel.send(entry);
+  }
+  pendingLogs.length = 0;
+}
+
+console.log = (...args) => {
+  originalConsole.log(...args);
+  sendLog("info", formatLogArgs(args));
+};
+console.warn = (...args) => {
+  originalConsole.warn(...args);
+  sendLog("warn", formatLogArgs(args));
+};
+console.error = (...args) => {
+  originalConsole.error(...args);
+  sendLog("error", formatLogArgs(args));
+};
 
 // ---- 季節・イベントごとのテーマカラー定義 ----
 const HALLOWEEN_ORANGE = [255, 40, 0];
@@ -242,7 +309,6 @@ let count = 0;
 let busy = false;
 let highSince = null;
 let isUnlocked = false;
-let channel;
 let lastSensor = "OFF";
 let lastLux = null;
 let lastLuxSentAt = 0;
@@ -663,8 +729,9 @@ const relay = RelayServer(
   "https://chirimen.org",
 );
 channel = await relay.subscribe(CHANNEL_NAME);
-console.log("web socketリレーサービスに接続しました");
 channel.onmessage = handleMessage;
+flushPendingLogs();
+console.log("web socketリレーサービスに接続しました");
 
 lastSensor = (await readSensorPressed()) ? "ON" : "OFF";
 try {
