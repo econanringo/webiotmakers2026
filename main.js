@@ -31,8 +31,23 @@ const COLOR_ORANGE = [255, 45, 0];
 const COLOR_BLACK = [0, 0, 0];
 const SPLIT_SEND = false;
 const SPLIT_AT = 72;
+
+// ---- 季節・イベントごとのテーマカラー定義 ----
 const HALLOWEEN_ORANGE = [255, 40, 0];
 const HALLOWEEN_PURPLE = [120, 0, 200];
+
+const HANAMI_PINK = [255, 105, 180];    // 桜色（ピンク）
+const HANAMI_GREEN = [30, 200, 50];     // 葉桜色（緑）
+
+const XMAS_RED = [255, 0, 0];          // クリスマスレッド
+const XMAS_GREEN = [0, 200, 0];        // クリスマスグリーン
+
+const HANABI_BLUE = [0, 100, 255];      // 夜空・打ち上げ（青）
+const HANABI_CYAN = [0, 255, 200];      // 華やかな光（シアン）
+
+const NEWYEAR_GOLD = [255, 180, 0];     // 金・初日の出（ゴールド）
+const NEWYEAR_RED = [230, 20, 20];      // 祝いの朱色（レッド）
+
 const TRACK_UMBRELLA = 1;
 const TRACK_LEFT_BLINKER = 2;
 const TRACK_RIGHT_BLINKER = 3;
@@ -126,9 +141,39 @@ function interpolateColor(color1, color2, factor) {
   return [r, g, b];
 }
 
+// 季節・イベントごとのエフェクト関数
 function halloweenColor(i, step) {
   const wave = (Math.sin((i + step) * 0.15) + 1) / 2;
   return interpolateColor(HALLOWEEN_ORANGE, HALLOWEEN_PURPLE, wave);
+}
+
+function hanamiColor(i, step) {
+  const wave = (Math.sin((i + step) * 0.15) + 1) / 2;
+  return interpolateColor(HANAMI_PINK, HANAMI_GREEN, wave);
+}
+
+function christmasColor(i, step) {
+  const wave = (Math.sin((i + step) * 0.15) + 1) / 2;
+  return interpolateColor(XMAS_RED, XMAS_GREEN, wave);
+}
+
+function hanabiColor(i, step) {
+  const wave = (Math.sin((i + step) * 0.2) + 1) / 2;
+  return interpolateColor(HANABI_BLUE, HANABI_CYAN, wave);
+}
+
+function newYearColor(i, step) {
+  const wave = (Math.sin((i + step) * 0.12) + 1) / 2;
+  return interpolateColor(NEWYEAR_GOLD, NEWYEAR_RED, wave);
+}
+
+// アクティブなエフェクトに応じた色を取得
+function getThemeColor(i, step, effect) {
+  if (effect === "HANAMI") return hanamiColor(i, step);
+  if (effect === "CHRISTMAS") return christmasColor(i, step);
+  if (effect === "HANABI") return hanabiColor(i, step);
+  if (effect === "NEWYEAR") return newYearColor(i, step);
+  return halloweenColor(i, step); // デフォルト・ハロウィン
 }
 
 // ---- DFPlayer シリアル ----
@@ -207,7 +252,7 @@ let ledEffect = "OFF";
 let isLeftPressed = false;
 let isRightPressed = false;
 let blinkerStep = 1;
-let halloweenStep = 0;
+let animStep = 0; // 演出ステップ共通カウンター
 
 function lockStateLabel() {
   return isUnlocked ? "UNLOCK" : "LOCK";
@@ -355,9 +400,14 @@ function applyMusicCommand(data) {
 
 function applyLedCommand(data) {
   const command = data.command;
+  // 花火（HANABI）と正月（NEWYEAR）も受信可能に拡張
   if (
     command !== "AUTO" &&
     command !== "HALLOWEEN" &&
+    command !== "HANAMI" &&
+    command !== "CHRISTMAS" &&
+    command !== "HANABI" &&
+    command !== "NEWYEAR" &&
     command !== "LEFT" &&
     command !== "RIGHT" &&
     command !== "OFF"
@@ -508,16 +558,20 @@ async function runLuxLoop() {
 function resolveLedEffect() {
   if (ledMode === "OFF") return "OFF";
   if (ledMode === "HALLOWEEN") return "HALLOWEEN";
+  if (ledMode === "HANAMI") return "HANAMI";
+  if (ledMode === "CHRISTMAS") return "CHRISTMAS";
+  if (ledMode === "HANABI") return "HANABI";
+  if (ledMode === "NEWYEAR") return "NEWYEAR";
   if (ledMode === "LEFT") return "LEFT";
   if (ledMode === "RIGHT") return "RIGHT";
   if (lastLux == null || lastLux >= LED_LUX_THRESHOLD) return "OFF";
   if (isLeftPressed) return "LEFT";
   if (isRightPressed) return "RIGHT";
-  return "HALLOWEEN";
+  return "HALLOWEEN"; // 暗いときのデフォルト演出
 }
 
 async function runLedLoop() {
-  console.log("制御開始: 照度判定 ＆ ハロウィン演出 ＆ 左右ウインカー");
+  console.log("制御開始: 照度判定 ＆ イベント演出（ハロウィン/花見/クリスマス/花火/正月）＆ 左右ウインカー");
   while (true) {
     const nextEffect = resolveLedEffect();
     if (nextEffect !== ledEffect) {
@@ -526,7 +580,14 @@ async function runLedLoop() {
       if (ledEffect === "OFF") blinkerStep = 1;
       if (ledEffect === "LEFT") playTrack(TRACK_LEFT_BLINKER);
       else if (ledEffect === "RIGHT") playTrack(TRACK_RIGHT_BLINKER);
-      else if (ledEffect === "HALLOWEEN" && prevEffect === "OFF") {
+      else if (
+        (ledEffect === "HALLOWEEN" ||
+         ledEffect === "HANAMI" ||
+         ledEffect === "CHRISTMAS" ||
+         ledEffect === "HANABI" ||
+         ledEffect === "NEWYEAR") &&
+        prevEffect === "OFF"
+      ) {
         playTrack(TRACK_NIGHT_LED);
       }
       sendLedState();
@@ -541,11 +602,11 @@ async function runLedLoop() {
         );
         await sendFrame(
           npixRight,
-          (i) => halloweenColor(i, halloweenStep),
+          (i) => getThemeColor(i, animStep, "HALLOWEEN"),
           withI2cPort3,
         );
         blinkerStep += BLINKER_SPEED;
-        halloweenStep++;
+        animStep++;
         if (blinkerStep > TOTAL_LEDS) {
           blinkerStep = 1;
           await sleep(100);
@@ -554,7 +615,7 @@ async function runLedLoop() {
       } else if (ledEffect === "RIGHT") {
         await sendFrame(
           npixLeft,
-          (i) => halloweenColor(i, halloweenStep),
+          (i) => getThemeColor(i, animStep, "HALLOWEEN"),
           withI2c,
         );
         await sendFrame(
@@ -563,18 +624,24 @@ async function runLedLoop() {
           withI2cPort3,
         );
         blinkerStep += BLINKER_SPEED;
-        halloweenStep++;
+        animStep++;
         if (blinkerStep > TOTAL_LEDS) {
           blinkerStep = 1;
           await sleep(100);
         }
         await sleep(30);
-      } else if (ledEffect === "HALLOWEEN") {
+      } else if (
+        ledEffect === "HALLOWEEN" ||
+        ledEffect === "HANAMI" ||
+        ledEffect === "CHRISTMAS" ||
+        ledEffect === "HANABI" ||
+        ledEffect === "NEWYEAR"
+      ) {
         blinkerStep = 1;
-        halloweenStep++;
-        const getHalloweenColor = (i) => halloweenColor(i, halloweenStep);
-        await sendFrame(npixLeft, getHalloweenColor, withI2c);
-        await sendFrame(npixRight, getHalloweenColor, withI2cPort3);
+        animStep++;
+        const getThemeColorFn = (i) => getThemeColor(i, animStep, ledEffect);
+        await sendFrame(npixLeft, getThemeColorFn, withI2c);
+        await sendFrame(npixRight, getThemeColorFn, withI2cPort3);
         await sleep(30);
       } else {
         blinkerStep = 1;
